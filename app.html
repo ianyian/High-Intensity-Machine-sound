@@ -51,7 +51,13 @@
   #alertBanner{display:none;grid-column:1/-1;background:#5e1a16;border:1px solid var(--bad);color:#ffd7d4;padding:10px 16px;border-radius:10px;font-size:13px}
   #log{max-height:160px;overflow-y:auto;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--dim);padding:0 14px 12px;line-height:1.7}
   footer{padding:10px 18px;font-size:11px;color:var(--dim)}
-  @media(max-width:900px){main{grid-template-columns:1fr}}
+  #fab{display:none;position:fixed;right:16px;bottom:16px;width:62px;height:62px;border-radius:50%;
+       border:none;cursor:pointer;z-index:40;font-size:26px;line-height:1;
+       align-items:center;justify-content:center;background:var(--accent);color:#222;
+       box-shadow:0 6px 18px rgba(0,0,0,.55)}
+  #fab.stop{background:var(--bad);color:#fff;font-size:22px}
+  #fab:active{transform:scale(.92)}
+  @media(max-width:900px){main{grid-template-columns:1fr}#fab{display:flex}}
   @media(max-width:700px){
     header{padding:8px 10px;gap:6px}
     header h1{font-size:13px;letter-spacing:1px}
@@ -146,6 +152,8 @@
   </div>
 </main>
 
+<button id="fab" title="Start / stop microphone">🎤</button>
+
 <footer>
   Prototype — browser-based acoustic monitoring for electronics manufacturing. All processing is local (Web Audio API); no data leaves this device.
   Recording exports a WAV file; Export CSV downloads the per-frame feature log for analysis / ML training.
@@ -214,6 +222,7 @@ async function startMic(){
     mediaStream=stream;
     log("Microphone input started.");
   }catch(e){
+    setRunningUI(false);
     log("Microphone unavailable ("+e.message+"). Try the demo instead.");
     alert("Could not access microphone: "+e.message+"\nUse 'Demo machine sound' to try the interface.");
   }
@@ -488,9 +497,19 @@ function loop(){
 }
 
 /* ---------- controls ---------- */
-$("btnStart").onclick=()=>{ if(running&&mediaStream){stopAll();$("btnStart").textContent="▶ Start microphone";log("Stopped.");}
-  else {startMic();$("btnStart").textContent="■ Stop";} };
-$("btnDemo").onclick=()=>{startDemo();$("btnStart").textContent="■ Stop";};
+function setRunningUI(on){
+  $("btnStart").textContent=on?"■ Stop":"▶ Start microphone";
+  const fab=$("fab");
+  fab.textContent=on?"■":"🎤";
+  fab.classList.toggle("stop",on);
+}
+function toggleInput(){
+  if(running){stopAll();setRunningUI(false);log("Stopped.");}
+  else{startMic();setRunningUI(true);}
+}
+$("btnStart").onclick=toggleInput;
+$("fab").onclick=toggleInput;
+$("btnDemo").onclick=()=>{startDemo();setRunningUI(true);};
 $("btnRec").onclick=()=>{
   if(!recorder) return;
   if(!recording){recorder.start();recording=true;$("dotRec").classList.add("reclive");
