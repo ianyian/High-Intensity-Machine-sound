@@ -52,6 +52,26 @@
   #log{max-height:160px;overflow-y:auto;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--dim);padding:0 14px 12px;line-height:1.7}
   footer{padding:10px 18px;font-size:11px;color:var(--dim)}
   @media(max-width:900px){main{grid-template-columns:1fr}}
+  @media(max-width:700px){
+    header{padding:8px 10px;gap:6px}
+    header h1{font-size:13px;letter-spacing:1px}
+    header .sub{font-size:9px}
+    .btn{padding:6px 10px;font-size:12px;border-radius:14px}
+    .status{margin-left:0;width:100%;gap:12px;font-size:11px}
+    main{gap:8px;padding:8px}
+    .card h2{font-size:10px;letter-spacing:1px;padding:8px 10px 4px}
+    .legend{left:8px;top:36px;font-size:8px}
+    .legend .bar{height:110px;width:10px}
+    .metrics{grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px;padding:8px 10px}
+    .metric{padding:7px}
+    .metric .v{font-size:16px}
+    .metric .k{font-size:9px}
+    .metric .u{font-size:10px}
+    #log{max-height:100px;font-size:10px}
+    #modalBox{padding:16px;max-height:88vh}
+    footer{font-size:10px;padding:8px 10px}
+  }
+  @media(max-height:820px){footer{display:none}#log{max-height:60px}.metric{padding:6px}.metric .v{font-size:16px}.metrics{gap:6px;padding:8px 12px}}
 </style>
 </head>
 <body>
@@ -84,22 +104,22 @@
       <div class="bar" id="legendBar"></div>
       <div><span id="legTop">6.0 kHz</span><br><br><span>0.0 kHz</span></div>
     </div>
-    <canvas id="manifold" height="380"></canvas>
+    <canvas id="manifold" height="380" data-vh="0.27"></canvas>
   </div>
 
   <div class="card">
     <h2>Live spectrum (FFT) <button class="help" data-help="spectrum" title="What is this chart?">?</button></h2>
-    <canvas id="spectrum" height="220"></canvas>
+    <canvas id="spectrum" height="220" data-vh="0.20"></canvas>
   </div>
 
   <div class="card">
     <h2>Spectrogram — frequency over time <button class="help" data-help="spectrogram" title="What is this chart?">?</button></h2>
-    <canvas id="spectrogram" height="220"></canvas>
+    <canvas id="spectrogram" height="220" data-vh="0.20"></canvas>
   </div>
 
   <div class="card">
     <h2>Multi-scale analysis — acoustic signature <button class="help" data-help="radar" title="What is this chart?">?</button></h2>
-    <canvas id="radar" height="260"></canvas>
+    <canvas id="radar" height="260" data-vh="0.24"></canvas>
   </div>
 
   <div class="card">
@@ -170,7 +190,11 @@ function fit(cv){
   // height attribute, so re-reading it would compound by devicePixelRatio each
   // resize and make the page grow forever on scaled/zoomed displays.
   if(!cv.dataset.designH) cv.dataset.designH=cv.getAttribute("height");
-  const hCss=parseInt(cv.dataset.designH);
+  const maxH=parseInt(cv.dataset.designH);
+  const frac=parseFloat(cv.dataset.vh||"0");       // viewport-height share for this chart
+  // Scale chart height to the viewport (never above the design height) so the
+  // whole dashboard fits a laptop screen and stays compact on phones.
+  const hCss=frac?Math.round(Math.min(maxH,Math.max(140,window.innerHeight*frac))):maxH;
   cv.style.height=hCss+"px";                       // lock CSS height so zoom keeps aspect
   const r=cv.getBoundingClientRect();
   cv.width=Math.max(80,Math.round(r.width*devicePixelRatio));
