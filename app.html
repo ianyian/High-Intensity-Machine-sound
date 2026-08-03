@@ -48,6 +48,7 @@
   .metric .k{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
   .metric .v{font-size:20px;font-weight:600;margin-top:2px}
   .metric .u{font-size:11px;color:var(--dim)}
+  .metric .spark{width:100%;height:34px;display:block;margin-top:6px}
   #alertBanner{display:none;grid-column:1/-1;background:#5e1a16;border:1px solid var(--bad);color:#ffd7d4;padding:10px 16px;border-radius:10px;font-size:13px}
   #log{max-height:160px;overflow-y:auto;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--dim);padding:0 14px 12px;line-height:1.7}
   footer{padding:10px 18px;font-size:11px;color:var(--dim)}
@@ -131,14 +132,14 @@
   <div class="card">
     <h2>Captured metrics <button class="help" data-help="metrics" title="What is this chart?">?</button></h2>
     <div class="metrics">
-      <div class="metric"><div class="k">Level</div><div class="v" id="mDb">–</div><div class="u">dBFS</div></div>
-      <div class="metric"><div class="k">Dominant freq</div><div class="v" id="mPeak">–</div><div class="u">Hz</div></div>
-      <div class="metric"><div class="k">Spectral centroid</div><div class="v" id="mCentroid">–</div><div class="u">Hz</div></div>
-      <div class="metric"><div class="k">Spectral spread</div><div class="v" id="mSpread">–</div><div class="u">Hz</div></div>
-      <div class="metric"><div class="k">Tonality (flatness)</div><div class="v" id="mFlat">–</div><div class="u">0=tonal · 1=noise</div></div>
-      <div class="metric"><div class="k">Crest factor</div><div class="v" id="mCrest">–</div><div class="u">peak/RMS</div></div>
-      <div class="metric"><div class="k">Rolloff 85%</div><div class="v" id="mRoll">–</div><div class="u">Hz</div></div>
-      <div class="metric"><div class="k">Baseline deviation</div><div class="v" id="mDev">–</div><div class="u">%</div></div>
+      <div class="metric"><div class="k">Level</div><div class="v" id="mDb">–</div><div class="u">dBFS</div><canvas class="spark"></canvas></div>
+      <div class="metric"><div class="k">Dominant freq</div><div class="v" id="mPeak">–</div><div class="u">Hz</div><canvas class="spark"></canvas></div>
+      <div class="metric"><div class="k">Spectral centroid</div><div class="v" id="mCentroid">–</div><div class="u">Hz</div><canvas class="spark"></canvas></div>
+      <div class="metric"><div class="k">Spectral spread</div><div class="v" id="mSpread">–</div><div class="u">Hz</div><canvas class="spark"></canvas></div>
+      <div class="metric"><div class="k">Tonality (flatness)</div><div class="v" id="mFlat">–</div><div class="u">0=tonal · 1=noise</div><canvas class="spark"></canvas></div>
+      <div class="metric"><div class="k">Crest factor</div><div class="v" id="mCrest">–</div><div class="u">peak/RMS</div><canvas class="spark"></canvas></div>
+      <div class="metric"><div class="k">Rolloff 85%</div><div class="v" id="mRoll">–</div><div class="u">Hz</div><canvas class="spark"></canvas></div>
+      <div class="metric"><div class="k">Baseline deviation</div><div class="v" id="mDev">–</div><div class="u">%</div><canvas class="spark"></canvas></div>
     </div>
     <h2>Event log</h2>
     <div id="log"></div>
@@ -280,6 +281,7 @@ function initAudio(makeSource){
   };
   running=true; startTime=performance.now(); frameCount=0;
   trail.length=0; featureLog.length=0; gramInit=false;
+  Object.keys(sparkHist).forEach(k=>delete sparkHist[k]);
   $("dotLive").classList.add("live");
   $("btnRec").disabled=false; $("btnBaseline").disabled=false; $("btnCsv").disabled=false;
   fitAll(); loop();
@@ -461,6 +463,54 @@ function drawManifold(f){
   c.restore();
 }
 
+/* ---------- metric sparklines (movement history per metric) ---------- */
+const SPARK_KEYS={mDb:"db",mPeak:"peak",mCentroid:"centroid",mSpread:"spread",
+                  mFlat:"flatness",mCrest:"crest",mRoll:"rolloff",mDev:"dev"};
+const SPARK_LEN=180;               // ~3 minutes at the 10 Hz metric rate
+const sparkHist={};
+const sparkCv={};
+Object.keys(SPARK_KEYS).forEach(id=>{
+  sparkCv[id]=$(id).closest(".metric").querySelector(".spark");
+});
+function drawSpark(cv,data,alertOn){
+  const dpr=devicePixelRatio, w=cv.clientWidth, h=cv.clientHeight;
+  if(!w||!h) return;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){
+    cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  }
+  const c=cv.getContext("2d"), W=cv.width, H=cv.height;
+  c.clearRect(0,0,W,H);
+  if(data.length<2) return;
+  let mn=Infinity,mx=-Infinity;
+  for(const v of data){if(v<mn)mn=v;if(v>mx)mx=v;}
+  if(mx-mn<1e-6){mn-=1;mx+=1;}
+  const pad=(mx-mn)*0.15; mn-=pad; mx+=pad;
+  const X=i=>2*dpr+i/(data.length-1)*(W-8*dpr);
+  const Y=v=>H-3*dpr-(v-mn)/(mx-mn)*(H-6*dpr);
+  const col=alertOn?"#ff6b60":"#4cd964";
+  c.beginPath();
+  data.forEach((v,i)=>i?c.lineTo(X(i),Y(v)):c.moveTo(X(i),Y(v)));
+  c.strokeStyle=col; c.lineWidth=1.4*dpr; c.stroke();
+  c.lineTo(X(data.length-1),H); c.lineTo(X(0),H); c.closePath();
+  const g=c.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,col+"55"); g.addColorStop(1,col+"00");
+  c.fillStyle=g; c.fill();
+  c.beginPath(); c.arc(X(data.length-1),Y(data[data.length-1]),2.5*dpr,0,7);
+  c.fillStyle=col; c.fill();
+}
+function updateSparks(f){
+  const vals={db:f.db,peak:f.peak,centroid:f.centroid,spread:f.spread,
+              flatness:f.flatness,crest:f.crest,rolloff:f.rolloff,dev:f.dev};
+  for(const [id,key] of Object.entries(SPARK_KEYS)){
+    const v=vals[key];
+    if(v==null||!isFinite(v)) continue;
+    const hist=sparkHist[id]||(sparkHist[id]=[]);
+    hist.push(v);
+    if(hist.length>SPARK_LEN) hist.shift();
+    drawSpark(sparkCv[id],hist,id==="mDev"&&v>25);
+  }
+}
+
 /* ---------- alerting ---------- */
 function checkAlert(f){
   const banner=$("alertBanner");
@@ -488,6 +538,7 @@ function loop(){
     featureLog.push([new Date().toISOString(),f.t.toFixed(2),f.db.toFixed(2),f.peak.toFixed(1),
       f.centroid.toFixed(1),f.spread.toFixed(1),f.flatness.toFixed(4),f.crest.toFixed(3),
       f.rolloff.toFixed(1),f.dev==null?"":f.dev.toFixed(2)]);
+    updateSparks(f);
   }
   checkAlert(f);
   const el=(performance.now()-startTime)/1000;
