@@ -43,6 +43,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install system audio library (PortAudio, required by sounddevice)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libportaudio2
+
       - name: Install and verify all Python libraries
         run: |
           python -m pip install --upgrade pip

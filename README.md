@@ -36,11 +36,15 @@ Runs directly on your machine with full microphone access — better suited for 
 factory-floor capture than the browser.
 
 ```bash
-pip install sounddevice numpy matplotlib
+pip install -r requirements.txt
 python monitor.py             # start with default microphone
 python monitor.py --list      # list audio input devices
 python monitor.py --device 3  # use a specific device
 ```
+
+On Linux, also install the PortAudio system library first:
+`sudo apt-get install libportaudio2` (Windows and macOS need nothing extra —
+the pip package bundles it).
 
 In the plot window: press **b** to capture the healthy baseline, **r** to start/stop a WAV
 recording, **c** to export the feature CSV, **q** to quit (CSV auto-exports on exit).
