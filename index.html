@@ -25,7 +25,7 @@
   .dot.reclive{background:var(--bad);box-shadow:0 0 8px var(--bad);animation:blink 1s infinite}
   @keyframes blink{50%{opacity:.3}}
   main{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto;gap:10px;padding:10px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative;min-width:0}
   .card h2{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);padding:10px 14px 6px;font-weight:600}
   .card canvas{display:block;width:100%}
   #manifoldCard{grid-column:1 / -1}
@@ -144,16 +144,26 @@ function ampColor(t){ // amplitude: blue→red→gold
   return spreadColor(t);
 }
 
-/* ---------- resize canvases for DPR ---------- */
-function fit(cv){const r=cv.getBoundingClientRect();cv.width=r.width*devicePixelRatio;cv.height=parseInt(cv.getAttribute("height"))*devicePixelRatio;}
-function fitAll(){[cvManifold,cvSpec,cvGram,cvRadar].forEach(fit);gramX=0;}
-window.addEventListener("resize",fitAll);
+/* ---------- resize canvases for DPR (stable under browser zoom) ---------- */
+function fit(cv){
+  const hCss=parseInt(cv.getAttribute("height"));
+  cv.style.height=hCss+"px";                       // lock CSS height so zoom keeps aspect
+  const r=cv.getBoundingClientRect();
+  cv.width=Math.max(80,Math.round(r.width*devicePixelRatio));
+  cv.height=Math.round(hCss*devicePixelRatio);
+}
+let fitTimer=null;
+function fitAll(){[cvManifold,cvSpec,cvGram,cvRadar].forEach(fit);gramInit=false;}
+function fitSoon(){clearTimeout(fitTimer);fitTimer=setTimeout(fitAll,120);}
+window.addEventListener("resize",fitSoon);
+new ResizeObserver(fitSoon).observe(document.body);
 
 /* ---------- audio setup ---------- */
 async function startMic(){
   try{
-    mediaStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
-    initAudio(ctx=>ctx.createMediaStreamSource(mediaStream));
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    initAudio(ctx=>ctx.createMediaStreamSource(stream));
+    mediaStream=stream;
     log("Microphone input started.");
   }catch(e){
     log("Microphone unavailable ("+e.message+"). Try the demo instead.");
@@ -212,7 +222,7 @@ function initAudio(makeSource){
     log("Audio recording saved to downloads.");
   };
   running=true; startTime=performance.now(); frameCount=0;
-  trail.length=0; featureLog.length=0; gramX=0;
+  trail.length=0; featureLog.length=0; gramInit=false;
   $("dotLive").classList.add("live");
   $("btnRec").disabled=false; $("btnBaseline").disabled=false; $("btnCsv").disabled=false;
   fitAll(); loop();
@@ -269,7 +279,7 @@ function extractFeatures(){
 }
 
 /* ---------- drawing ---------- */
-let gramX=0, rot=0;
+let gramInit=false, rot=0;
 
 function drawSpectrum(f){
   const c=cvSpec.getContext("2d"), W=cvSpec.width, H=cvSpec.height;
@@ -294,20 +304,18 @@ function drawSpectrum(f){
 }
 
 function drawSpectrogram(f){
+  // continuously scrolling waterfall: shift existing image left, append newest column at right
   const c=cvGram.getContext("2d"), W=cvGram.width, H=cvGram.height;
   const n=freqData.length, showN=Math.floor(n*0.5);
-  if(gramX===0){c.fillStyle="#242426";c.fillRect(0,0,W,H);}
-  const colW=2*devicePixelRatio;
+  const colW=Math.max(1,Math.round(2*devicePixelRatio));
+  if(!gramInit){c.fillStyle="#242426";c.fillRect(0,0,W,H);gramInit=true;}
+  c.drawImage(cvGram,colW,0,W-colW,H,0,0,W-colW,H);
+  const x=W-colW, rowH=H/showN;
   for(let i=0;i<showN;i++){
-    const y=H-(i/showN)*H;
     const t=Math.max(0,Math.min(1,(freqData[i]+95)/60));
     c.fillStyle=t<0.05?"#242426":spreadColor(t);
-    c.fillRect(gramX,y-H/showN,colW,H/showN+1);
+    c.fillRect(x,H-(i+1)*rowH,colW,rowH+1);
   }
-  gramX+=colW;
-  if(gramX>=W){gramX=0;}
-  // moving cursor
-  c.fillStyle="#111"; c.fillRect(gramX,0,colW,H);
 }
 
 function drawRadar(f){
@@ -349,38 +357,51 @@ function drawManifold(f){
   const c=cvManifold.getContext("2d"), W=cvManifold.width, H=cvManifold.height;
   c.fillStyle="#3a3a3c"; c.fillRect(0,0,W,H);
   rot+=0.004;
-  // add point: x=time (wraps), y=centroid, z=oscillating depth; size=amplitude; color=spread
+  // add point: x=time, y=centroid, z=oscillating depth; size=amplitude; color=spread
   trail.push({t:f.t, cen:f.centroid, amp:Math.max(0,(f.db+80)/60), spr:f.spread});
   if(trail.length>MAX_TRAIL) trail.shift();
   const cosR=Math.cos(rot), sinR=Math.sin(rot);
-  const t0=trail.length?trail[0].t:0, t1=trail.length?trail[trail.length-1].t:1;
+  const t0=trail[0].t, t1=trail[trail.length-1].t;
   const span=Math.max(5,t1-t0);
-  let prev=null;
-  // draw connecting line first
-  c.strokeStyle="rgba(255,255,255,.25)"; c.lineWidth=1;
+  // auto-scale the centroid axis to the data so the trajectory stays centered in the box
+  let cMin=Infinity,cMax=-Infinity;
+  trail.forEach(p=>{if(p.cen<cMin)cMin=p.cen;if(p.cen>cMax)cMax=p.cen;});
+  const cMid=(cMin+cMax)/2, cHalf=Math.max(400,(cMax-cMin)/2*1.25);
+  const dpr=devicePixelRatio, maxR=14*dpr;
+  const mX=W*0.08+maxR, mTop=34*dpr+maxR, mBot=16*dpr+maxR;   // keep bubbles inside the frame
   const proj=p=>{
-    const nx=((p.t-t0)/span-0.5)*2;          // -1..1 across time
-    const ny=(p.cen/5000-0.5)*2;             // centroid axis
-    const nz=Math.sin(p.t*0.7)*0.6;          // gentle depth wobble
+    const nx=((p.t-t0)/span-0.5)*2;                 // -1..1 across time
+    const ny=(p.cen-cMid)/cHalf;                    // -1..1 around data mid
+    const nz=Math.sin(p.t*0.7)*0.6;                 // gentle depth wobble
     const X=nx*cosR-nz*sinR, Z=nx*sinR+nz*cosR;
     const persp=1/(1+Z*0.35);
-    return {x:W/2+X*W*0.38*persp, y:H*0.85-((ny+1)/2)*H*0.7*persp, s:persp};
+    const cx=W/2, cy=mTop+(H-mTop-mBot)/2;
+    let x=cx+X*(W/2-mX)*persp;
+    let y=cy-ny*(H-mTop-mBot)/2*persp;
+    return {x:Math.max(mX,Math.min(W-mX,x)), y:Math.max(mTop,Math.min(H-mBot,y)), s:persp};
   };
+  let prev=null;
+  c.strokeStyle="rgba(255,255,255,.25)"; c.lineWidth=1;
   c.beginPath();
   trail.forEach(p=>{const q=proj(p); prev?c.lineTo(q.x,q.y):c.moveTo(q.x,q.y); prev=q;});
   c.stroke();
-  // bubbles
   trail.forEach((p,i)=>{
     const q=proj(p);
-    const r=(2+p.amp*16)*devicePixelRatio*q.s;
+    const r=Math.min(maxR,(2+p.amp*12)*dpr*q.s);
     c.beginPath(); c.arc(q.x,q.y,r,0,7);
     c.fillStyle=spreadColor(Math.min(1,p.spr/6000));
     c.globalAlpha=0.35+0.65*(i/trail.length);
     c.fill(); c.globalAlpha=1;
-    if(i%40===0&&r>4){c.fillStyle="rgba(255,255,255,.6)";
-      c.font=`${9*devicePixelRatio}px sans-serif`;
-      c.fillText((p.cen/1000).toFixed(2)+"K",q.x+r+2,q.y);}
+    if(i%60===0&&r>4*dpr){c.fillStyle="rgba(255,255,255,.6)";
+      c.font=`${9*dpr}px sans-serif`;
+      c.fillText((p.cen/1000).toFixed(2)+"K",Math.min(q.x+r+2,W-40*dpr),q.y);}
   });
+  // axis hint
+  c.fillStyle="#9a9aa0"; c.font=`${10*dpr}px sans-serif`;
+  c.fillText("→ TIME ("+span.toFixed(0)+" s window)",W/2-40*dpr,H-6*dpr);
+  c.save(); c.translate(W*0.055,H/2); c.rotate(-Math.PI/2);
+  c.fillText("CENTROID "+(cMid-cHalf<0?0:(cMid-cHalf)/1000).toFixed(1)+"–"+((cMid+cHalf)/1000).toFixed(1)+" kHz",-40*dpr,0);
+  c.restore();
 }
 
 /* ---------- alerting ---------- */

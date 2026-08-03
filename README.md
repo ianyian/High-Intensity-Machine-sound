@@ -4,15 +4,34 @@ A browser-based prototype for **recording and visualizing machine sound frequenc
 electronics-manufacturing environment, inspired by spectral "acoustic manifold" visualizations
 of bird song, adapted for industrial condition monitoring.
 
-## Quick start
+## Quick start (browser version)
 
 Open `index.html` in Chrome or Edge (no server or install needed).
+
+> Microphone note: browsers only allow mic access on `https://` pages or on `file://` /
+> `http://localhost` in Chrome/Edge. If mic access is blocked in your setup, use the
+> **Python desktop version** below — it has no such restriction.
 
 1. Click **Start microphone** near the machine (grant mic permission), or **Demo machine sound** to preview with a synthesized motor sound.
 2. Click **Set healthy baseline** while the machine runs normally — future deviations are flagged with an on-screen alert.
 3. **Record** saves the raw audio to a file; **Export CSV** downloads the per-frame acoustic feature log for analysis or ML training.
 
 All processing runs locally in the browser (Web Audio API). No data leaves the device.
+
+## Quick start (Python desktop version)
+
+Runs directly on your machine with full microphone access — better suited for real
+factory-floor capture than the browser.
+
+```bash
+pip install sounddevice numpy matplotlib
+python monitor.py             # start with default microphone
+python monitor.py --list      # list audio input devices
+python monitor.py --device 3  # use a specific device
+```
+
+In the plot window: press **b** to capture the healthy baseline, **r** to start/stop a WAV
+recording, **c** to export the feature CSV, **q** to quit (CSV auto-exports on exit).
 
 ## What the prototype shows
 
