@@ -26,7 +26,19 @@
   @keyframes blink{50%{opacity:.3}}
   main{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto;gap:10px;padding:10px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative;min-width:0}
-  .card h2{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);padding:10px 14px 6px;font-weight:600}
+  .card h2{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);padding:10px 14px 6px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .help{background:#48484c;border:1px solid var(--line);color:var(--accent);width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;font-weight:700;line-height:1;flex:none}
+  .help:hover{background:var(--accent);color:#222}
+  #modalOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:50;align-items:center;justify-content:center;padding:20px}
+  #modalOverlay.open{display:flex}
+  #modalBox{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:680px;max-height:82vh;overflow-y:auto;padding:22px 26px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  #modalBox h3{font-size:14px;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+  #modalBox h4{font-size:12px;color:var(--ink);margin:14px 0 4px}
+  #modalBox p,#modalBox li{font-size:13px;line-height:1.65;color:#d4d4d8}
+  #modalBox ul{padding-left:20px;margin:6px 0}
+  #modalBox b{color:var(--accent)}
+  #modalBox .close{float:right;background:#48484c;border:1px solid var(--line);color:var(--ink);border-radius:16px;padding:4px 14px;cursor:pointer;font-size:12px}
+  #modalBox .close:hover{background:#5a5a5e}
   .card canvas{display:block;width:100%}
   #manifoldCard{grid-column:1 / -1}
   .legend{position:absolute;left:14px;top:44px;font-size:9px;color:var(--dim);letter-spacing:1px}
@@ -66,7 +78,7 @@
   <div id="alertBanner"></div>
 
   <div class="card" id="manifoldCard">
-    <h2>Acoustic manifold — spectral trajectory (time × centroid × amplitude)</h2>
+    <h2>Acoustic manifold — spectral trajectory (time × centroid × amplitude) <button class="help" data-help="manifold" title="What is this chart?">?</button></h2>
     <div class="legend">
       <div>SPECTRAL SPREAD</div>
       <div class="bar" id="legendBar"></div>
@@ -76,22 +88,22 @@
   </div>
 
   <div class="card">
-    <h2>Live spectrum (FFT)</h2>
+    <h2>Live spectrum (FFT) <button class="help" data-help="spectrum" title="What is this chart?">?</button></h2>
     <canvas id="spectrum" height="220"></canvas>
   </div>
 
   <div class="card">
-    <h2>Spectrogram — frequency over time</h2>
+    <h2>Spectrogram — frequency over time <button class="help" data-help="spectrogram" title="What is this chart?">?</button></h2>
     <canvas id="spectrogram" height="220"></canvas>
   </div>
 
   <div class="card">
-    <h2>Multi-scale analysis — acoustic signature</h2>
+    <h2>Multi-scale analysis — acoustic signature <button class="help" data-help="radar" title="What is this chart?">?</button></h2>
     <canvas id="radar" height="260"></canvas>
   </div>
 
   <div class="card">
-    <h2>Captured metrics</h2>
+    <h2>Captured metrics <button class="help" data-help="metrics" title="What is this chart?">?</button></h2>
     <div class="metrics">
       <div class="metric"><div class="k">Level</div><div class="v" id="mDb">–</div><div class="u">dBFS</div></div>
       <div class="metric"><div class="k">Dominant freq</div><div class="v" id="mPeak">–</div><div class="u">Hz</div></div>
@@ -104,6 +116,13 @@
     </div>
     <h2>Event log</h2>
     <div id="log"></div>
+  </div>
+
+  <div id="modalOverlay">
+    <div id="modalBox">
+      <button class="close" onclick="document.getElementById('modalOverlay').classList.remove('open')">✕ Close</button>
+      <div id="modalContent"></div>
+    </div>
   </div>
 </main>
 
@@ -468,6 +487,94 @@ $("btnCsv").onclick=()=>{
   a.click();
   log("Exported "+featureLog.length+" feature rows to CSV.");
 };
+
+/* ---------- help popups ---------- */
+const HELP={
+manifold:`<h3>Acoustic Manifold — spectral trajectory</h3>
+<p>A trail of the recent sound history, one bubble every ~0.1&nbsp;s. It answers at a glance: <b>is the machine's sound stable, or is it changing?</b></p>
+<h4>How to read each bubble</h4>
+<ul>
+<li><b>Horizontal position</b> = time — oldest left, newest right.</li>
+<li><b>Vertical position</b> = spectral centroid (the "center of gravity" of the frequencies). Low = deep/bassy rumble; high = sharp/hissy sound.</li>
+<li><b>Bubble size</b> = loudness at that moment.</li>
+<li><b>Color</b> (blue → red → yellow) = spectral spread. Blue = clean pure tone; yellow = messy broadband noise.</li>
+</ul>
+<h4>What movement means</h4>
+<ul>
+<li><b>Flat, steady, same-color ribbon</b> — healthy machine in steady state. This is what you want.</li>
+<li><b>Ribbon slowly drifting upward</b> over days/weeks — sound getting "brighter": classic signature of rising friction or bearing wear.</li>
+<li><b>Sudden vertical spikes</b> — impact events (press stroke, part drop, knocking). Regular spikes = your process cycle; <i>irregular</i> spikes = investigate.</li>
+<li><b>Bubbles growing larger</b> — machine getting louder (load, imbalance, looseness).</li>
+<li><b>Color shifting toward yellow</b> — tone turning into noise: grinding, rattle, or air leak developing.</li>
+</ul>
+<p>The 🔄 "3D rotate" button in the toolbar adds a slow 3D rotation (visual effect for demos only — keep it off for monitoring).</p>`,
+spectrum:`<h3>Live Spectrum (FFT)</h3>
+<p>A real-time snapshot, ~60×/second, of <b>which frequencies are present right now and how strong each is</b>. Horizontal = frequency (Hz), bar height = energy. The dashed yellow line marks the spectral centroid.</p>
+<h4>What the shapes mean for a machine</h4>
+<ul>
+<li><b>Tall evenly-spaced spikes on the left</b> — a motor and its harmonics (multiples of rotation speed), e.g. 120 / 240 / 360&nbsp;Hz. This is the machine's fingerprint; spike position tells you rotation speed.</li>
+<li><b>Main spike moving left/right</b> — motor running slower/faster than usual: load change, belt slip, or speed-control issue.</li>
+<li><b>New spikes appearing between harmonics</b> ("sidebands") — classic early bearing-defect or gear-damage signature.</li>
+<li><b>The flat "grass" between spikes rising</b> — broadband noise increasing: friction, air leaks, wear.</li>
+<li><b>Yellow centroid line drifting right</b> — overall brightness increasing (same wear signal as the manifold drifting upward).</li>
+</ul>`,
+spectrogram:`<h3>Spectrogram — frequency over time</h3>
+<p>The spectrum stacked over time so you can see <b>history</b>. Each thin vertical slice is one moment; new audio appears at the right edge and scrolls left. Vertical = frequency, color brightness = energy. This is the standard chart in professional vibration/acoustic analysis.</p>
+<h4>How to read it</h4>
+<ul>
+<li><b>Horizontal lines</b> — continuous tones (motor hum + harmonics). Straight unbroken lines = stable machine.</li>
+<li><b>A line bending up or down</b> — the machine's speed changed at that moment.</li>
+<li><b>A bright vertical stripe</b> — a broadband burst: impact, clunk, or drop (all frequencies at once for an instant).</li>
+<li><b>A line flickering or breaking up</b> — intermittent contact: loose connection, chattering part, slipping belt.</li>
+<li><b>Whole image getting brighter over time</b> — noise floor rising = general wear or a developing leak.</li>
+</ul>`,
+radar:`<h3>Multi-scale Analysis — acoustic signature</h3>
+<p>Six sound features condensed into one shape — the machine's acoustic <b>fingerprint</b>. Each spoke runs 0 (center) to max (edge). What matters is the <b>shape, not any single number</b>: a healthy machine draws the same shape every day. <b>When the shape changes, the machine changed.</b></p>
+<h4>The six spokes</h4>
+<ul>
+<li><b>LEVEL</b> — loudness.</li>
+<li><b>CENTROID</b> — brightness (high = sharp/hissy).</li>
+<li><b>SPREAD</b> — how widely energy spreads across frequencies.</li>
+<li><b>TONALITY</b> — pure hum (high) vs. noisy (low).</li>
+<li><b>CREST</b> — impulsiveness: knocks/impacts vs. smooth running.</li>
+<li><b>ROLLOFF</b> — amount of high-frequency content.</li>
+</ul>
+<h4>Diagnostic examples</h4>
+<ul>
+<li>Bulging toward <b>CREST</b> — knocking/impacts appearing: bearing defects, loose parts.</li>
+<li>Shrinking <b>TONALITY</b> + growing <b>SPREAD</b> — clean hum turning into grinding noise.</li>
+<li>Growing <b>CENTROID</b> + <b>ROLLOFF</b> — friction/wear developing.</li>
+</ul>
+<p>Tip: screenshot the healthy shape on day one — anyone on the floor can compare shapes without training.</p>`,
+metrics:`<h3>Captured Metrics — the numbers in your CSV export</h3>
+<ul>
+<li><b>Level (dBFS)</b> — loudness; 0 = maximum, more negative = quieter. Healthy: stable within ±2–3 dB. Rising = wear, imbalance, load problem.</li>
+<li><b>Dominant freq (Hz)</b> — the single strongest tone, usually motor rotation × a small multiple. Healthy: constant. Shifting = speed change or belt slip.</li>
+<li><b>Spectral centroid (Hz)</b> — brightness (energy-weighted average frequency). Creeping up over weeks = <b>the classic early wear indicator</b>.</li>
+<li><b>Spectral spread (Hz)</b> — width of the energy distribution. Growing = rattle, looseness, noise replacing tone.</li>
+<li><b>Tonality / flatness (0–1)</b> — 0 = pure tone, 1 = pure noise. Rising toward 1 = grinding or air leak.</li>
+<li><b>Crest factor</b> — peak ÷ average. Smooth hum ≈ 1.4–3; impacts push it to 6+. Rising = knocking — <b>the most-watched number in bearing diagnostics</b>.</li>
+<li><b>Rolloff 85% (Hz)</b> — frequency below which 85% of energy sits. Rising = high-frequency (friction) energy growing.</li>
+<li><b>Baseline deviation %</b> — average distance between the current spectrum and the saved "healthy" one. Near 0–10% is normal; above ~25% triggers the red alert banner.</li>
+</ul>
+<h4>The most important idea</h4>
+<p>No value is "good" or "bad" on its own — every machine has its own normal. What matters is <b>change relative to that machine's own healthy baseline</b>:</p>
+<ul>
+<li>Run the monitor while the machine is known-good and press <b>Set healthy baseline</b>.</li>
+<li>Watch <b>deviation %</b> and <b>trends</b>, not absolute numbers.</li>
+<li>Slow drift over days/weeks = wear (schedule maintenance). Sudden jump = something happened right now (inspect immediately).</li>
+</ul>`};
+document.querySelectorAll(".help").forEach(b=>b.onclick=e=>{
+  e.stopPropagation();
+  document.getElementById("modalContent").innerHTML=HELP[b.dataset.help]||"";
+  document.getElementById("modalOverlay").classList.add("open");
+});
+document.getElementById("modalOverlay").onclick=e=>{
+  if(e.target.id==="modalOverlay") e.target.classList.remove("open");
+};
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape") document.getElementById("modalOverlay").classList.remove("open");
+});
 
 fitAll();
 log("Ready. Click 'Start microphone' near a machine, or 'Demo machine sound' to preview.");

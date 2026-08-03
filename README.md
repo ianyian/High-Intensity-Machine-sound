@@ -1,3 +1,15 @@
+---
+title: High Intensity Machine Sound
+emoji: 🏭
+colorFrom: gray
+colorTo: yellow
+sdk: static
+app_file: index.html
+pinned: false
+license: mit
+short_description: Factory machine sound frequency monitor and recorder
+---
+
 # Factory Acoustic Monitor — Machine Sound Frequency Recorder
 
 A browser-based prototype for **recording and visualizing machine sound frequencies** in an
@@ -84,6 +96,27 @@ recording, **c** to export the feature CSV, **q** to quit (CSV auto-exports on e
 5. **Workplace safety & compliance** — continuous dB(A) logging documents noise-exposure compliance (hearing-conservation regulations) as a free by-product.
 6. **Institutional knowledge capture** — experienced technicians "hear" problems; this system digitizes that skill so it scales across shifts and sites, and builds a labeled dataset that grows more valuable over time.
 7. **Energy & OEE insight** — acoustic load signatures reveal idle-but-running equipment and feed OEE availability metrics.
+
+## Deployment — Hugging Face Space (auto-deploy)
+
+The live demo runs at <https://huggingface.co/spaces/YianXingJian/HighIntensityMachine>
+as a **static** Space (configured by the YAML front matter at the top of this README).
+
+Every push to `main` triggers `.github/workflows/deploy-huggingface.yml`, which:
+
+1. **Verifies the environment** — required files exist, the Space config is valid,
+   all Python libraries in `requirements.txt` install and import cleanly, and
+   `monitor.py` / `index.html` pass sanity checks.
+2. **Deploys** — force-pushes the repository to the Space, which rebuilds automatically.
+
+One-time setup: create a **write** token at <https://huggingface.co/settings/tokens>
+and save it as a GitHub Actions secret named `HF_TOKEN`
+(GitHub repo → Settings → Secrets and variables → Actions).
+
+> Microphone on Hugging Face: the Space page embeds the app in an iframe, which some
+> browsers restrict for mic access. If the mic button does not work there, open the
+> app directly at <https://yianxingjian-highintensitymachine.static.hf.space> —
+> served over HTTPS without the iframe, where microphone access works normally.
 
 ## Limitations of this prototype (what production adds)
 
