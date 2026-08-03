@@ -54,6 +54,7 @@
   <button class="btn" id="btnRec" disabled>● Record</button>
   <button class="btn" id="btnBaseline" disabled>Set healthy baseline</button>
   <button class="btn" id="btnCsv" disabled>⬇ Export CSV</button>
+  <button class="btn" id="btnRotate" title="Slowly rotate the manifold like a 3D object (visual effect only)">🔄 3D rotate: off</button>
   <div class="status">
     <span><span class="dot" id="dotLive"></span>INPUT</span>
     <span><span class="dot" id="dotRec"></span>REC</span>
@@ -279,7 +280,7 @@ function extractFeatures(){
 }
 
 /* ---------- drawing ---------- */
-let gramInit=false, rot=0;
+let gramInit=false, rot=0, rotate3d=false;
 
 function drawSpectrum(f){
   const c=cvSpec.getContext("2d"), W=cvSpec.width, H=cvSpec.height;
@@ -356,7 +357,7 @@ function drawRadar(f){
 function drawManifold(f){
   const c=cvManifold.getContext("2d"), W=cvManifold.width, H=cvManifold.height;
   c.fillStyle="#3a3a3c"; c.fillRect(0,0,W,H);
-  rot+=0.004;
+  if(rotate3d) rot+=0.004; else rot=0;
   // add point: x=time, y=centroid, z=oscillating depth; size=amplitude; color=spread
   trail.push({t:f.t, cen:f.centroid, amp:Math.max(0,(f.db+80)/60), spr:f.spread});
   if(trail.length>MAX_TRAIL) trail.shift();
@@ -372,7 +373,7 @@ function drawManifold(f){
   const proj=p=>{
     const nx=((p.t-t0)/span-0.5)*2;                 // -1..1 across time
     const ny=(p.cen-cMid)/cHalf;                    // -1..1 around data mid
-    const nz=Math.sin(p.t*0.7)*0.6;                 // gentle depth wobble
+    const nz=rotate3d?Math.sin(p.t*0.7)*0.6:0;      // depth wobble only in 3D mode
     const X=nx*cosR-nz*sinR, Z=nx*sinR+nz*cosR;
     const persp=1/(1+Z*0.35);
     const cx=W/2, cy=mTop+(H-mTop-mBot)/2;
@@ -453,6 +454,10 @@ $("btnRec").onclick=()=>{
 $("btnBaseline").onclick=()=>{
   baseline=Float32Array.from(freqData);
   log("Healthy baseline captured — deviations from this spectrum will now be flagged.");
+};
+$("btnRotate").onclick=()=>{
+  rotate3d=!rotate3d;
+  $("btnRotate").textContent="🔄 3D rotate: "+(rotate3d?"on":"off");
 };
 $("btnCsv").onclick=()=>{
   const head="timestamp,elapsed_s,level_dbfs,dominant_hz,centroid_hz,spread_hz,flatness,crest,rolloff85_hz,baseline_dev_pct\n";
