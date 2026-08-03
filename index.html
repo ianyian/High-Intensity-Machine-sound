@@ -166,7 +166,11 @@ function ampColor(t){ // amplitude: blue→red→gold
 
 /* ---------- resize canvases for DPR (stable under browser zoom) ---------- */
 function fit(cv){
-  const hCss=parseInt(cv.getAttribute("height"));
+  // Cache the design height on first use: assigning cv.height below rewrites the
+  // height attribute, so re-reading it would compound by devicePixelRatio each
+  // resize and make the page grow forever on scaled/zoomed displays.
+  if(!cv.dataset.designH) cv.dataset.designH=cv.getAttribute("height");
+  const hCss=parseInt(cv.dataset.designH);
   cv.style.height=hCss+"px";                       // lock CSS height so zoom keeps aspect
   const r=cv.getBoundingClientRect();
   cv.width=Math.max(80,Math.round(r.width*devicePixelRatio));
