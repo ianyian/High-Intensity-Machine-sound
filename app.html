@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory Acoustic Monitor — Machine Sound Frequency Recorder</title>
+<style>
+  :root{
+    --bg:#3a3a3c; --panel:#2c2c2e; --panel2:#242426; --ink:#f2f2f4; --dim:#9a9aa0;
+    --accent:#ffd166; --ok:#4cd964; --warn:#ff9f0a; --bad:#ff453a; --line:#4a4a4e;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;overflow-x:hidden}
+  header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+  header h1{font-size:16px;letter-spacing:2px;font-weight:600;text-transform:uppercase}
+  header .sub{font-size:11px;color:var(--dim);letter-spacing:1px}
+  .btn{background:#48484c;border:1px solid var(--line);color:var(--ink);padding:8px 16px;border-radius:20px;cursor:pointer;font-size:13px;transition:all .15s}
+  .btn:hover{background:#5a5a5e}
+  .btn.primary{background:var(--accent);color:#222;font-weight:600;border-color:var(--accent)}
+  .btn.rec{background:var(--bad);border-color:var(--bad);font-weight:600}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .status{margin-left:auto;display:flex;gap:16px;align-items:center;font-size:12px;color:var(--dim)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#666;margin-right:5px;vertical-align:middle}
+  .dot.live{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .dot.reclive{background:var(--bad);box-shadow:0 0 8px var(--bad);animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.3}}
+  main{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto;gap:10px;padding:10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative;min-width:0}
+  .card h2{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);padding:10px 14px 6px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .help{background:#48484c;border:1px solid var(--line);color:var(--accent);width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;font-weight:700;line-height:1;flex:none}
+  .help:hover{background:var(--accent);color:#222}
+  #modalOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:50;align-items:center;justify-content:center;padding:20px}
+  #modalOverlay.open{display:flex}
+  #modalBox{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:680px;max-height:82vh;overflow-y:auto;padding:22px 26px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  #modalBox h3{font-size:14px;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+  #modalBox h4{font-size:12px;color:var(--ink);margin:14px 0 4px}
+  #modalBox p,#modalBox li{font-size:13px;line-height:1.65;color:#d4d4d8}
+  #modalBox ul{padding-left:20px;margin:6px 0}
+  #modalBox b{color:var(--accent)}
+  #modalBox .close{float:right;background:#48484c;border:1px solid var(--line);color:var(--ink);border-radius:16px;padding:4px 14px;cursor:pointer;font-size:12px}
+  #modalBox .close:hover{background:#5a5a5e}
+  .card canvas{display:block;width:100%}
+  #manifoldCard{grid-column:1 / -1}
+  .legend{position:absolute;left:14px;top:44px;font-size:9px;color:var(--dim);letter-spacing:1px}
+  .legend .bar{width:14px;height:180px;border-radius:3px;margin:4px 0}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;padding:12px 14px}
+  .metric{background:var(--panel2);border-radius:8px;padding:10px}
+  .metric .k{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+  .metric .v{font-size:20px;font-weight:600;margin-top:2px}
+  .metric .u{font-size:11px;color:var(--dim)}
+  #alertBanner{display:none;grid-column:1/-1;background:#5e1a16;border:1px solid var(--bad);color:#ffd7d4;padding:10px 16px;border-radius:10px;font-size:13px}
+  #log{max-height:160px;overflow-y:auto;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--dim);padding:0 14px 12px;line-height:1.7}
+  footer{padding:10px 18px;font-size:11px;color:var(--dim)}
+  @media(max-width:900px){main{grid-template-columns:1fr}}
+  @media(max-width:700px){
+    header{padding:8px 10px;gap:6px}
+    header h1{font-size:13px;letter-spacing:1px}
+    header .sub{font-size:9px}
+    .btn{padding:6px 10px;font-size:12px;border-radius:14px}
+    .status{margin-left:0;width:100%;gap:12px;font-size:11px}
+    main{gap:8px;padding:8px}
+    .card h2{font-size:10px;letter-spacing:1px;padding:8px 10px 4px}
+    .legend{left:8px;top:36px;font-size:8px}
+    .legend .bar{height:110px;width:10px}
+    .metrics{grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px;padding:8px 10px}
+    .metric{padding:7px}
+    .metric .v{font-size:16px}
+    .metric .k{font-size:9px}
+    .metric .u{font-size:10px}
+    #log{max-height:100px;font-size:10px}
+    #modalBox{padding:16px;max-height:88vh}
+    footer{font-size:10px;padding:8px 10px}
+  }
+  @media(max-height:820px){footer{display:none}#log{max-height:60px}.metric{padding:6px}.metric .v{font-size:16px}.metrics{gap:6px;padding:8px 12px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Acoustic Manifold — Factory Edition</h1>
+    <div class="sub">MACHINE SOUND FREQUENCY MONITOR &amp; RECORDER</div>
+  </div>
+  <button class="btn primary" id="btnStart">▶ Start microphone</button>
+  <button class="btn" id="btnDemo">Demo machine sound</button>
+  <button class="btn" id="btnRec" disabled>● Record</button>
+  <button class="btn" id="btnBaseline" disabled>Set healthy baseline</button>
+  <button class="btn" id="btnCsv" disabled>⬇ Export CSV</button>
+  <button class="btn" id="btnRotate" title="Slowly rotate the manifold like a 3D object (visual effect only)">🔄 3D rotate: off</button>
+  <div class="status">
+    <span><span class="dot" id="dotLive"></span>INPUT</span>
+    <span><span class="dot" id="dotRec"></span>REC</span>
+    <span id="clock">00:00</span>
+  </div>
+</header>
+
+<main>
+  <div id="alertBanner"></div>
+
+  <div class="card" id="manifoldCard">
+    <h2>Acoustic manifold — spectral trajectory (time × centroid × amplitude) <button class="help" data-help="manifold" title="What is this chart?">?</button></h2>
+    <div class="legend">
+      <div>SPECTRAL SPREAD</div>
+      <div class="bar" id="legendBar"></div>
+      <div><span id="legTop">6.0 kHz</span><br><br><span>0.0 kHz</span></div>
+    </div>
+    <canvas id="manifold" height="380" data-vh="0.27"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Live spectrum (FFT) <button class="help" data-help="spectrum" title="What is this chart?">?</button></h2>
+    <canvas id="spectrum" height="220" data-vh="0.20"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Spectrogram — frequency over time <button class="help" data-help="spectrogram" title="What is this chart?">?</button></h2>
+    <canvas id="spectrogram" height="220" data-vh="0.20"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Multi-scale analysis — acoustic signature <button class="help" data-help="radar" title="What is this chart?">?</button></h2>
+    <canvas id="radar" height="260" data-vh="0.24"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Captured metrics <button class="help" data-help="metrics" title="What is this chart?">?</button></h2>
+    <div class="metrics">
+      <div class="metric"><div class="k">Level</div><div class="v" id="mDb">–</div><div class="u">dBFS</div></div>
+      <div class="metric"><div class="k">Dominant freq</div><div class="v" id="mPeak">–</div><div class="u">Hz</div></div>
+      <div class="metric"><div class="k">Spectral centroid</div><div class="v" id="mCentroid">–</div><div class="u">Hz</div></div>
+      <div class="metric"><div class="k">Spectral spread</div><div class="v" id="mSpread">–</div><div class="u">Hz</div></div>
+      <div class="metric"><div class="k">Tonality (flatness)</div><div class="v" id="mFlat">–</div><div class="u">0=tonal · 1=noise</div></div>
+      <div class="metric"><div class="k">Crest factor</div><div class="v" id="mCrest">–</div><div class="u">peak/RMS</div></div>
+      <div class="metric"><div class="k">Rolloff 85%</div><div class="v" id="mRoll">–</div><div class="u">Hz</div></div>
+      <div class="metric"><div class="k">Baseline deviation</div><div class="v" id="mDev">–</div><div class="u">%</div></div>
+    </div>
+    <h2>Event log</h2>
+    <div id="log"></div>
+  </div>
+
+  <div id="modalOverlay">
+    <div id="modalBox">
+      <button class="close" onclick="document.getElementById('modalOverlay').classList.remove('open')">✕ Close</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Prototype — browser-based acoustic monitoring for electronics manufacturing. All processing is local (Web Audio API); no data leaves this device.
+  Recording exports a WAV file; Export CSV downloads the per-frame feature log for analysis / ML training.
+</footer>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- state ---------- */
+let audioCtx=null, analyser=null, srcNode=null, demoNodes=null, mediaStream=null;
+let running=false, recording=false, recorder=null, recChunks=[];
+let startTime=0, frameCount=0;
+let baseline=null;                 // saved healthy spectrum
+const featureLog=[];               // rows for CSV export
+const trail=[];                    // manifold points
+const MAX_TRAIL=900;
+const FFT_SIZE=4096;
+
+/* ---------- dom ---------- */
+const $=id=>document.getElementById(id);
+const cvManifold=$("manifold"), cvSpec=$("spectrum"), cvGram=$("spectrogram"), cvRadar=$("radar");
+const log=(msg,cls)=>{const d=$("log");const t=new Date().toLocaleTimeString();
+  d.insertAdjacentHTML("afterbegin",`<div>[${t}] ${msg}</div>`);};
+
+/* legend gradient (blue→magenta→red→yellow, like the reference) */
+(() => {const b=$("legendBar");b.style.background="linear-gradient(to top,#3a3aff,#b040d0,#ff4040,#ffd020)";})();
+function spreadColor(t){ // t 0..1
+  t=Math.min(1,Math.max(0,t));
+  const stops=[[58,58,255],[176,64,208],[255,64,64],[255,208,32]];
+  const x=t*(stops.length-1), i=Math.min(stops.length-2,Math.floor(x)), f=x-i;
+  const c=stops[i].map((v,k)=>Math.round(v+(stops[i+1][k]-v)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function ampColor(t){ // amplitude: blue→red→gold
+  return spreadColor(t);
+}
+
+/* ---------- resize canvases for DPR (stable under browser zoom) ---------- */
+function fit(cv){
+  // Cache the design height on first use: assigning cv.height below rewrites the
+  // height attribute, so re-reading it would compound by devicePixelRatio each
+  // resize and make the page grow forever on scaled/zoomed displays.
+  if(!cv.dataset.designH) cv.dataset.designH=cv.getAttribute("height");
+  const maxH=parseInt(cv.dataset.designH);
+  const frac=parseFloat(cv.dataset.vh||"0");       // viewport-height share for this chart
+  // Scale chart height to the viewport (never above the design height) so the
+  // whole dashboard fits a laptop screen and stays compact on phones.
+  const hCss=frac?Math.round(Math.min(maxH,Math.max(140,window.innerHeight*frac))):maxH;
+  cv.style.height=hCss+"px";                       // lock CSS height so zoom keeps aspect
+  const r=cv.getBoundingClientRect();
+  cv.width=Math.max(80,Math.round(r.width*devicePixelRatio));
+  cv.height=Math.round(hCss*devicePixelRatio);
+}
+let fitTimer=null;
+function fitAll(){[cvManifold,cvSpec,cvGram,cvRadar].forEach(fit);gramInit=false;}
+function fitSoon(){clearTimeout(fitTimer);fitTimer=setTimeout(fitAll,120);}
+window.addEventListener("resize",fitSoon);
+new ResizeObserver(fitSoon).observe(document.body);
+
+/* ---------- audio setup ---------- */
+async function startMic(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    initAudio(ctx=>ctx.createMediaStreamSource(stream));
+    mediaStream=stream;
+    log("Microphone input started.");
+  }catch(e){
+    log("Microphone unavailable ("+e.message+"). Try the demo instead.");
+    alert("Could not access microphone: "+e.message+"\nUse 'Demo machine sound' to try the interface.");
+  }
+}
+
+/* synthesized "machine" for demo: motor hum + harmonics + broadband hiss + periodic impact */
+function startDemo(){
+  initAudio(ctx=>{
+    const g=ctx.createGain(); g.gain.value=.6;
+    const hum=ctx.createOscillator(); hum.type="sawtooth"; hum.frequency.value=120;
+    const hg=ctx.createGain(); hg.gain.value=.25; hum.connect(hg).connect(g);
+    const h2=ctx.createOscillator(); h2.type="sine"; h2.frequency.value=2400;
+    const h2g=ctx.createGain(); h2g.gain.value=.06; h2.connect(h2g).connect(g);
+    const noiseBuf=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);
+    const nd=noiseBuf.getChannelData(0); for(let i=0;i<nd.length;i++) nd[i]=Math.random()*2-1;
+    const noise=ctx.createBufferSource(); noise.buffer=noiseBuf; noise.loop=true;
+    const nf=ctx.createBiquadFilter(); nf.type="bandpass"; nf.frequency.value=3000; nf.Q.value=.5;
+    const ng=ctx.createGain(); ng.gain.value=.12; noise.connect(nf).connect(ng).connect(g);
+    const lfo=ctx.createOscillator(); lfo.frequency.value=.2;
+    const lg=ctx.createGain(); lg.gain.value=800; lfo.connect(lg).connect(nf.frequency);
+    hum.start(); h2.start(); noise.start(); lfo.start();
+    // periodic press "impact"
+    const impact=()=>{ if(!running) return;
+      const o=ctx.createOscillator(); o.type="square"; o.frequency.value=700;
+      const og=ctx.createGain(); og.gain.setValueAtTime(.5,ctx.currentTime);
+      og.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.15);
+      o.connect(og).connect(g); o.start(); o.stop(ctx.currentTime+.2);
+      setTimeout(impact,2500+Math.random()*1500); };
+    setTimeout(impact,1500);
+    demoNodes=[hum,h2,noise,lfo];
+    return g;
+  });
+  log("Demo machine sound started (motor hum + harmonics + hiss + periodic impacts).");
+}
+
+function initAudio(makeSource){
+  stopAll(false);
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  analyser=audioCtx.createAnalyser();
+  analyser.fftSize=FFT_SIZE; analyser.smoothingTimeConstant=.55;
+  srcNode=makeSource(audioCtx);
+  srcNode.connect(analyser);
+  // recording tap (works for mic and demo)
+  const dest=audioCtx.createMediaStreamDestination();
+  srcNode.connect(dest);
+  recorder=new MediaRecorder(dest.stream);
+  recorder.ondataavailable=e=>recChunks.push(e.data);
+  recorder.onstop=()=>{
+    const blob=new Blob(recChunks,{type:recorder.mimeType});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="machine-recording-"+new Date().toISOString().replace(/[:.]/g,"-")+".webm";
+    a.click(); recChunks=[];
+    log("Audio recording saved to downloads.");
+  };
+  running=true; startTime=performance.now(); frameCount=0;
+  trail.length=0; featureLog.length=0; gramInit=false;
+  $("dotLive").classList.add("live");
+  $("btnRec").disabled=false; $("btnBaseline").disabled=false; $("btnCsv").disabled=false;
+  fitAll(); loop();
+}
+
+function stopAll(clearUI=true){
+  running=false;
+  if(recorder&&recorder.state==="recording") recorder.stop();
+  if(demoNodes){demoNodes.forEach(n=>{try{n.stop()}catch(e){}}); demoNodes=null;}
+  if(mediaStream){mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null;}
+  if(audioCtx){audioCtx.close(); audioCtx=null;}
+  if(clearUI) $("dotLive").classList.remove("live");
+}
+
+/* ---------- feature extraction ---------- */
+const freqData=new Float32Array(FFT_SIZE/2);
+const timeData=new Float32Array(FFT_SIZE);
+
+function extractFeatures(){
+  analyser.getFloatFrequencyData(freqData);
+  analyser.getFloatTimeDomainData(timeData);
+  const sr=audioCtx.sampleRate, nyq=sr/2, n=freqData.length, binHz=nyq/n;
+  // linear magnitudes
+  let sum=0, wsum=0, peakV=-Infinity, peakI=0, geo=0, arith=0, cnt=0;
+  const mags=new Float32Array(n);
+  for(let i=1;i<n;i++){
+    const m=Math.pow(10,freqData[i]/20); mags[i]=m;
+    sum+=m; wsum+=m*i*binHz;
+    if(freqData[i]>peakV){peakV=freqData[i];peakI=i;}
+    geo+=Math.log(m+1e-12); arith+=m; cnt++;
+  }
+  const centroid=sum>0?wsum/sum:0;
+  let varSum=0;
+  for(let i=1;i<n;i++){const d=i*binHz-centroid; varSum+=mags[i]*d*d;}
+  const spread=sum>0?Math.sqrt(varSum/sum):0;
+  const flatness=Math.exp(geo/cnt)/((arith/cnt)+1e-12);
+  // rolloff 85%
+  let acc=0, roll=0; const target=sum*.85;
+  for(let i=1;i<n;i++){acc+=mags[i]; if(acc>=target){roll=i*binHz;break;}}
+  // time-domain: RMS + crest
+  let rms=0, pk=0;
+  for(let i=0;i<timeData.length;i++){const v=timeData[i]; rms+=v*v; pk=Math.max(pk,Math.abs(v));}
+  rms=Math.sqrt(rms/timeData.length);
+  const db=20*Math.log10(rms+1e-9);
+  const crest=rms>0?pk/rms:0;
+  // baseline deviation (mean abs dB difference across spectrum)
+  let dev=null;
+  if(baseline){
+    let s=0; for(let i=1;i<n;i++) s+=Math.abs(freqData[i]-baseline[i]);
+    dev=(s/n)/60*100; // normalize vs 60 dB span
+  }
+  return {t:(performance.now()-startTime)/1000, db, rms, crest,
+          peak:peakI*binHz, centroid, spread, flatness, rolloff:roll, dev, nyq};
+}
+
+/* ---------- drawing ---------- */
+let gramInit=false, rot=0, rotate3d=false;
+
+function drawSpectrum(f){
+  const c=cvSpec.getContext("2d"), W=cvSpec.width, H=cvSpec.height;
+  c.fillStyle="#242426"; c.fillRect(0,0,W,H);
+  const n=freqData.length, showN=Math.floor(n*0.5); // up to nyq/2 (~12kHz at 48k)
+  const bw=W/showN;
+  for(let i=0;i<showN;i++){
+    const dbv=freqData[i], h=Math.max(0,(dbv+100)/70)*H;
+    c.fillStyle=ampColor(Math.max(0,(dbv+90)/60));
+    c.fillRect(i*bw,H-h,Math.max(1,bw-0.5),h);
+  }
+  // axis labels
+  c.fillStyle="#9a9aa0"; c.font=`${10*devicePixelRatio}px sans-serif`;
+  const maxF=f.nyq*0.5;
+  for(let k=0;k<=5;k++){const fr=maxF*k/5;
+    c.fillText((fr/1000).toFixed(1)+"k",k/5*W*0.96+4,H-6*devicePixelRatio);}
+  // centroid marker
+  const cx=f.centroid/maxF*W;
+  c.strokeStyle="#ffd166"; c.lineWidth=2; c.setLineDash([6,4]);
+  c.beginPath(); c.moveTo(cx,0); c.lineTo(cx,H); c.stroke(); c.setLineDash([]);
+  c.fillStyle="#ffd166"; c.fillText("centroid",cx+5,14*devicePixelRatio);
+}
+
+function drawSpectrogram(f){
+  // continuously scrolling waterfall: shift existing image left, append newest column at right
+  const c=cvGram.getContext("2d"), W=cvGram.width, H=cvGram.height;
+  const n=freqData.length, showN=Math.floor(n*0.5);
+  const colW=Math.max(1,Math.round(2*devicePixelRatio));
+  if(!gramInit){c.fillStyle="#242426";c.fillRect(0,0,W,H);gramInit=true;}
+  c.drawImage(cvGram,colW,0,W-colW,H,0,0,W-colW,H);
+  const x=W-colW, rowH=H/showN;
+  for(let i=0;i<showN;i++){
+    const t=Math.max(0,Math.min(1,(freqData[i]+95)/60));
+    c.fillStyle=t<0.05?"#242426":spreadColor(t);
+    c.fillRect(x,H-(i+1)*rowH,colW,rowH+1);
+  }
+}
+
+function drawRadar(f){
+  const c=cvRadar.getContext("2d"), W=cvRadar.width, H=cvRadar.height;
+  c.fillStyle="#242426"; c.fillRect(0,0,W,H);
+  const cx=W/2, cy=H/2+8, R=Math.min(W,H)/2-46*devicePixelRatio;
+  const axes=[
+    ["LEVEL",       Math.max(0,Math.min(1,(f.db+70)/60))],
+    ["CENTROID",    Math.min(1,f.centroid/6000)],
+    ["SPREAD",      Math.min(1,f.spread/4000)],
+    ["TONALITY",    1-Math.min(1,f.flatness*4)],
+    ["CREST",       Math.min(1,f.crest/8)],
+    ["ROLLOFF",     Math.min(1,f.rolloff/10000)],
+  ];
+  const N=axes.length;
+  c.strokeStyle="#4a4a4e"; c.lineWidth=1;
+  for(let ring=1;ring<=4;ring++){
+    c.beginPath();
+    for(let i=0;i<=N;i++){const a=-Math.PI/2+i/N*2*Math.PI;
+      const r=R*ring/4;
+      i?c.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a)):c.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a));}
+    c.stroke();
+  }
+  c.fillStyle="#9a9aa0"; c.font=`${10*devicePixelRatio}px sans-serif`; c.textAlign="center";
+  axes.forEach((ax,i)=>{const a=-Math.PI/2+i/N*2*Math.PI;
+    c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+R*Math.cos(a),cy+R*Math.sin(a));c.stroke();
+    c.fillText(ax[0],cx+(R+24*devicePixelRatio)*Math.cos(a),cy+(R+18*devicePixelRatio)*Math.sin(a)+4);});
+  // polygon
+  c.beginPath();
+  axes.forEach((ax,i)=>{const a=-Math.PI/2+i/N*2*Math.PI, r=R*ax[1];
+    i?c.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a)):c.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a));});
+  c.closePath();
+  c.fillStyle="rgba(230,50,90,.45)"; c.fill();
+  c.strokeStyle="rgba(255,90,130,.9)"; c.lineWidth=2; c.stroke();
+  c.textAlign="left";
+}
+
+function drawManifold(f){
+  const c=cvManifold.getContext("2d"), W=cvManifold.width, H=cvManifold.height;
+  c.fillStyle="#3a3a3c"; c.fillRect(0,0,W,H);
+  if(rotate3d) rot+=0.004; else rot=0;
+  // add point: x=time, y=centroid, z=oscillating depth; size=amplitude; color=spread
+  trail.push({t:f.t, cen:f.centroid, amp:Math.max(0,(f.db+80)/60), spr:f.spread});
+  if(trail.length>MAX_TRAIL) trail.shift();
+  const cosR=Math.cos(rot), sinR=Math.sin(rot);
+  const t0=trail[0].t, t1=trail[trail.length-1].t;
+  const span=Math.max(5,t1-t0);
+  // auto-scale the centroid axis to the data so the trajectory stays centered in the box
+  let cMin=Infinity,cMax=-Infinity;
+  trail.forEach(p=>{if(p.cen<cMin)cMin=p.cen;if(p.cen>cMax)cMax=p.cen;});
+  const cMid=(cMin+cMax)/2, cHalf=Math.max(400,(cMax-cMin)/2*1.25);
+  const dpr=devicePixelRatio, maxR=14*dpr;
+  const mX=W*0.08+maxR, mTop=34*dpr+maxR, mBot=16*dpr+maxR;   // keep bubbles inside the frame
+  const proj=p=>{
+    const nx=((p.t-t0)/span-0.5)*2;                 // -1..1 across time
+    const ny=(p.cen-cMid)/cHalf;                    // -1..1 around data mid
+    const nz=rotate3d?Math.sin(p.t*0.7)*0.6:0;      // depth wobble only in 3D mode
+    const X=nx*cosR-nz*sinR, Z=nx*sinR+nz*cosR;
+    const persp=1/(1+Z*0.35);
+    const cx=W/2, cy=mTop+(H-mTop-mBot)/2;
+    let x=cx+X*(W/2-mX)*persp;
+    let y=cy-ny*(H-mTop-mBot)/2*persp;
+    return {x:Math.max(mX,Math.min(W-mX,x)), y:Math.max(mTop,Math.min(H-mBot,y)), s:persp};
+  };
+  let prev=null;
+  c.strokeStyle="rgba(255,255,255,.25)"; c.lineWidth=1;
+  c.beginPath();
+  trail.forEach(p=>{const q=proj(p); prev?c.lineTo(q.x,q.y):c.moveTo(q.x,q.y); prev=q;});
+  c.stroke();
+  trail.forEach((p,i)=>{
+    const q=proj(p);
+    const r=Math.min(maxR,(2+p.amp*12)*dpr*q.s);
+    c.beginPath(); c.arc(q.x,q.y,r,0,7);
+    c.fillStyle=spreadColor(Math.min(1,p.spr/6000));
+    c.globalAlpha=0.35+0.65*(i/trail.length);
+    c.fill(); c.globalAlpha=1;
+    if(i%60===0&&r>4*dpr){c.fillStyle="rgba(255,255,255,.6)";
+      c.font=`${9*dpr}px sans-serif`;
+      c.fillText((p.cen/1000).toFixed(2)+"K",Math.min(q.x+r+2,W-40*dpr),q.y);}
+  });
+  // axis hint
+  c.fillStyle="#9a9aa0"; c.font=`${10*dpr}px sans-serif`;
+  c.fillText("→ TIME ("+span.toFixed(0)+" s window)",W/2-40*dpr,H-6*dpr);
+  c.save(); c.translate(W*0.055,H/2); c.rotate(-Math.PI/2);
+  c.fillText("CENTROID "+(cMid-cHalf<0?0:(cMid-cHalf)/1000).toFixed(1)+"–"+((cMid+cHalf)/1000).toFixed(1)+" kHz",-40*dpr,0);
+  c.restore();
+}
+
+/* ---------- alerting ---------- */
+function checkAlert(f){
+  const banner=$("alertBanner");
+  if(f.dev!=null&&f.dev>25){
+    banner.style.display="block";
+    banner.textContent="⚠ ACOUSTIC DEVIATION "+f.dev.toFixed(0)+"% from healthy baseline — inspect machine (possible bearing wear, imbalance, loose part, or abnormal process).";
+    if(frameCount%180===0) log("Deviation alert: "+f.dev.toFixed(1)+"% from baseline.");
+  } else banner.style.display="none";
+}
+
+/* ---------- main loop ---------- */
+function loop(){
+  if(!running) return;
+  const f=extractFeatures();
+  drawSpectrum(f); drawSpectrogram(f); drawRadar(f); drawManifold(f);
+  if(frameCount%6===0){ // ~10 Hz metric/log rate
+    $("mDb").textContent=f.db.toFixed(1);
+    $("mPeak").textContent=f.peak.toFixed(0);
+    $("mCentroid").textContent=f.centroid.toFixed(0);
+    $("mSpread").textContent=f.spread.toFixed(0);
+    $("mFlat").textContent=f.flatness.toFixed(3);
+    $("mCrest").textContent=f.crest.toFixed(2);
+    $("mRoll").textContent=f.rolloff.toFixed(0);
+    $("mDev").textContent=f.dev==null?"no baseline":f.dev.toFixed(1);
+    featureLog.push([new Date().toISOString(),f.t.toFixed(2),f.db.toFixed(2),f.peak.toFixed(1),
+      f.centroid.toFixed(1),f.spread.toFixed(1),f.flatness.toFixed(4),f.crest.toFixed(3),
+      f.rolloff.toFixed(1),f.dev==null?"":f.dev.toFixed(2)]);
+  }
+  checkAlert(f);
+  const el=(performance.now()-startTime)/1000;
+  $("clock").textContent=String(Math.floor(el/60)).padStart(2,"0")+":"+String(Math.floor(el%60)).padStart(2,"0");
+  frameCount++;
+  requestAnimationFrame(loop);
+}
+
+/* ---------- controls ---------- */
+$("btnStart").onclick=()=>{ if(running&&mediaStream){stopAll();$("btnStart").textContent="▶ Start microphone";log("Stopped.");}
+  else {startMic();$("btnStart").textContent="■ Stop";} };
+$("btnDemo").onclick=()=>{startDemo();$("btnStart").textContent="■ Stop";};
+$("btnRec").onclick=()=>{
+  if(!recorder) return;
+  if(!recording){recorder.start();recording=true;$("dotRec").classList.add("reclive");
+    $("btnRec").textContent="■ Stop rec";$("btnRec").classList.add("rec");log("Recording started.");}
+  else{recorder.stop();recording=false;$("dotRec").classList.remove("reclive");
+    $("btnRec").textContent="● Record";$("btnRec").classList.remove("rec");}
+};
+$("btnBaseline").onclick=()=>{
+  baseline=Float32Array.from(freqData);
+  log("Healthy baseline captured — deviations from this spectrum will now be flagged.");
+};
+$("btnRotate").onclick=()=>{
+  rotate3d=!rotate3d;
+  $("btnRotate").textContent="🔄 3D rotate: "+(rotate3d?"on":"off");
+};
+$("btnCsv").onclick=()=>{
+  const head="timestamp,elapsed_s,level_dbfs,dominant_hz,centroid_hz,spread_hz,flatness,crest,rolloff85_hz,baseline_dev_pct\n";
+  const blob=new Blob([head+featureLog.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="machine-features-"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
+  a.click();
+  log("Exported "+featureLog.length+" feature rows to CSV.");
+};
+
+/* ---------- help popups ---------- */
+const HELP={
+manifold:`<h3>Acoustic Manifold — spectral trajectory</h3>
+<p>A trail of the recent sound history, one bubble every ~0.1&nbsp;s. It answers at a glance: <b>is the machine's sound stable, or is it changing?</b></p>
+<h4>How to read each bubble</h4>
+<ul>
+<li><b>Horizontal position</b> = time — oldest left, newest right.</li>
+<li><b>Vertical position</b> = spectral centroid (the "center of gravity" of the frequencies). Low = deep/bassy rumble; high = sharp/hissy sound.</li>
+<li><b>Bubble size</b> = loudness at that moment.</li>
+<li><b>Color</b> (blue → red → yellow) = spectral spread. Blue = clean pure tone; yellow = messy broadband noise.</li>
+</ul>
+<h4>What movement means</h4>
+<ul>
+<li><b>Flat, steady, same-color ribbon</b> — healthy machine in steady state. This is what you want.</li>
+<li><b>Ribbon slowly drifting upward</b> over days/weeks — sound getting "brighter": classic signature of rising friction or bearing wear.</li>
+<li><b>Sudden vertical spikes</b> — impact events (press stroke, part drop, knocking). Regular spikes = your process cycle; <i>irregular</i> spikes = investigate.</li>
+<li><b>Bubbles growing larger</b> — machine getting louder (load, imbalance, looseness).</li>
+<li><b>Color shifting toward yellow</b> — tone turning into noise: grinding, rattle, or air leak developing.</li>
+</ul>
+<p>The 🔄 "3D rotate" button in the toolbar adds a slow 3D rotation (visual effect for demos only — keep it off for monitoring).</p>`,
+spectrum:`<h3>Live Spectrum (FFT)</h3>
+<p>A real-time snapshot, ~60×/second, of <b>which frequencies are present right now and how strong each is</b>. Horizontal = frequency (Hz), bar height = energy. The dashed yellow line marks the spectral centroid.</p>
+<h4>What the shapes mean for a machine</h4>
+<ul>
+<li><b>Tall evenly-spaced spikes on the left</b> — a motor and its harmonics (multiples of rotation speed), e.g. 120 / 240 / 360&nbsp;Hz. This is the machine's fingerprint; spike position tells you rotation speed.</li>
+<li><b>Main spike moving left/right</b> — motor running slower/faster than usual: load change, belt slip, or speed-control issue.</li>
+<li><b>New spikes appearing between harmonics</b> ("sidebands") — classic early bearing-defect or gear-damage signature.</li>
+<li><b>The flat "grass" between spikes rising</b> — broadband noise increasing: friction, air leaks, wear.</li>
+<li><b>Yellow centroid line drifting right</b> — overall brightness increasing (same wear signal as the manifold drifting upward).</li>
+</ul>`,
+spectrogram:`<h3>Spectrogram — frequency over time</h3>
+<p>The spectrum stacked over time so you can see <b>history</b>. Each thin vertical slice is one moment; new audio appears at the right edge and scrolls left. Vertical = frequency, color brightness = energy. This is the standard chart in professional vibration/acoustic analysis.</p>
+<h4>How to read it</h4>
+<ul>
+<li><b>Horizontal lines</b> — continuous tones (motor hum + harmonics). Straight unbroken lines = stable machine.</li>
+<li><b>A line bending up or down</b> — the machine's speed changed at that moment.</li>
+<li><b>A bright vertical stripe</b> — a broadband burst: impact, clunk, or drop (all frequencies at once for an instant).</li>
+<li><b>A line flickering or breaking up</b> — intermittent contact: loose connection, chattering part, slipping belt.</li>
+<li><b>Whole image getting brighter over time</b> — noise floor rising = general wear or a developing leak.</li>
+</ul>`,
+radar:`<h3>Multi-scale Analysis — acoustic signature</h3>
+<p>Six sound features condensed into one shape — the machine's acoustic <b>fingerprint</b>. Each spoke runs 0 (center) to max (edge). What matters is the <b>shape, not any single number</b>: a healthy machine draws the same shape every day. <b>When the shape changes, the machine changed.</b></p>
+<h4>The six spokes</h4>
+<ul>
+<li><b>LEVEL</b> — loudness.</li>
+<li><b>CENTROID</b> — brightness (high = sharp/hissy).</li>
+<li><b>SPREAD</b> — how widely energy spreads across frequencies.</li>
+<li><b>TONALITY</b> — pure hum (high) vs. noisy (low).</li>
+<li><b>CREST</b> — impulsiveness: knocks/impacts vs. smooth running.</li>
+<li><b>ROLLOFF</b> — amount of high-frequency content.</li>
+</ul>
+<h4>Diagnostic examples</h4>
+<ul>
+<li>Bulging toward <b>CREST</b> — knocking/impacts appearing: bearing defects, loose parts.</li>
+<li>Shrinking <b>TONALITY</b> + growing <b>SPREAD</b> — clean hum turning into grinding noise.</li>
+<li>Growing <b>CENTROID</b> + <b>ROLLOFF</b> — friction/wear developing.</li>
+</ul>
+<p>Tip: screenshot the healthy shape on day one — anyone on the floor can compare shapes without training.</p>`,
+metrics:`<h3>Captured Metrics — the numbers in your CSV export</h3>
+<ul>
+<li><b>Level (dBFS)</b> — loudness; 0 = maximum, more negative = quieter. Healthy: stable within ±2–3 dB. Rising = wear, imbalance, load problem.</li>
+<li><b>Dominant freq (Hz)</b> — the single strongest tone, usually motor rotation × a small multiple. Healthy: constant. Shifting = speed change or belt slip.</li>
+<li><b>Spectral centroid (Hz)</b> — brightness (energy-weighted average frequency). Creeping up over weeks = <b>the classic early wear indicator</b>.</li>
+<li><b>Spectral spread (Hz)</b> — width of the energy distribution. Growing = rattle, looseness, noise replacing tone.</li>
+<li><b>Tonality / flatness (0–1)</b> — 0 = pure tone, 1 = pure noise. Rising toward 1 = grinding or air leak.</li>
+<li><b>Crest factor</b> — peak ÷ average. Smooth hum ≈ 1.4–3; impacts push it to 6+. Rising = knocking — <b>the most-watched number in bearing diagnostics</b>.</li>
+<li><b>Rolloff 85% (Hz)</b> — frequency below which 85% of energy sits. Rising = high-frequency (friction) energy growing.</li>
+<li><b>Baseline deviation %</b> — average distance between the current spectrum and the saved "healthy" one. Near 0–10% is normal; above ~25% triggers the red alert banner.</li>
+</ul>
+<h4>The most important idea</h4>
+<p>No value is "good" or "bad" on its own — every machine has its own normal. What matters is <b>change relative to that machine's own healthy baseline</b>:</p>
+<ul>
+<li>Run the monitor while the machine is known-good and press <b>Set healthy baseline</b>.</li>
+<li>Watch <b>deviation %</b> and <b>trends</b>, not absolute numbers.</li>
+<li>Slow drift over days/weeks = wear (schedule maintenance). Sudden jump = something happened right now (inspect immediately).</li>
+</ul>`};
+document.querySelectorAll(".help").forEach(b=>b.onclick=e=>{
+  e.stopPropagation();
+  document.getElementById("modalContent").innerHTML=HELP[b.dataset.help]||"";
+  document.getElementById("modalOverlay").classList.add("open");
+});
+document.getElementById("modalOverlay").onclick=e=>{
+  if(e.target.id==="modalOverlay") e.target.classList.remove("open");
+};
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape") document.getElementById("modalOverlay").classList.remove("open");
+});
+
+fitAll();
+log("Ready. Click 'Start microphone' near a machine, or 'Demo machine sound' to preview.");
+})();
+</script>
+</body>
+</html>

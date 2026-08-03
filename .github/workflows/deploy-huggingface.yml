@@ -27,7 +27,7 @@ jobs:
 
       - name: Check required files exist
         run: |
-          for f in index.html README.md requirements.txt monitor.py; do
+          for f in app.html index.html README.md requirements.txt monitor.py; do
             [ -f "$f" ] || { echo "::error::Missing required file: $f"; exit 1; }
           done
           echo "All required files present."
@@ -35,7 +35,7 @@ jobs:
       - name: Check Space config in README front matter
         run: |
           head -20 README.md | grep -q "sdk: static"      || { echo "::error::README.md missing 'sdk: static' front matter"; exit 1; }
-          head -20 README.md | grep -q "app_file: index.html" || { echo "::error::README.md missing 'app_file: index.html'"; exit 1; }
+          head -20 README.md | grep -q "app_file: app.html" || { echo "::error::README.md missing 'app_file: app.html'"; exit 1; }
           echo "Hugging Face Space config OK."
 
       - name: Set up Python
@@ -56,10 +56,10 @@ jobs:
       - name: Syntax-check monitor.py
         run: python -m py_compile monitor.py
 
-      - name: Sanity-check index.html
+      - name: Sanity-check app.html
         run: |
-          grep -q "btnStart" index.html || { echo "::error::index.html appears incomplete"; exit 1; }
-          echo "index.html OK."
+          grep -q "btnStart" app.html || { echo "::error::app.html appears incomplete"; exit 1; }
+          echo "app.html OK."
 
   deploy:
     name: Push to Hugging Face Space

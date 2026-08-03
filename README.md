@@ -4,7 +4,7 @@ emoji: 🏭
 colorFrom: gray
 colorTo: yellow
 sdk: static
-app_file: index.html
+app_file: app.html
 pinned: false
 license: mit
 short_description: Factory machine sound frequency monitor and recorder
@@ -16,9 +16,26 @@ A browser-based prototype for **recording and visualizing machine sound frequenc
 electronics-manufacturing environment, inspired by spectral "acoustic manifold" visualizations
 of bird song, adapted for industrial condition monitoring.
 
+## 🚀 Try it live
+
+**Test the app here (no install needed):**
+
+### 👉 https://yianxingjian-highintensitymachine.static.hf.space/ 👈
+
+Hosted on Hugging Face Spaces — Space page:
+<https://huggingface.co/spaces/YianXingJian/HighIntensityMachine>
+
+Click **Demo machine sound** to try it instantly with a synthesized motor, or
+**Start microphone** to analyze real sound around you. Every chart has a **?**
+button explaining what it shows and what its movement means for machine condition.
+
+> Use the direct `.hf.space` link above for microphone access — the Space page embeds
+> the app in an iframe, which some browsers restrict for mic use.
+
 ## Quick start (browser version)
 
-Open `index.html` in Chrome or Edge (no server or install needed).
+The web app lives in [`app.html`](app.html) — you can also download that file and open it
+locally in Chrome or Edge (no server or install needed).
 
 > Microphone note: browsers only allow mic access on `https://` pages or on `file://` /
 > `http://localhost` in Chrome/Edge. If mic access is blocked in your setup, use the
