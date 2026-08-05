@@ -462,7 +462,7 @@ function drawManifold(f,live=true){
 
   const pos=b=>{
     const frT=(b+0.5)/MBINS;                       // 0..1 across frequency range
-    const nx=binJit(b)*0.9+Math.sin(f.t*0.25+b*1.7)*0.08;   // fixed spot + tiny drift
+    const nx=binJit(b)*0.9+(rotate3d?Math.sin(f.t*0.25+b*1.7)*0.08:0);  // fixed spot (+ tiny drift only while rotating)
     const nz=binJit(b+97)*0.8;
     const X=nx*cosR-nz*sinR, Z=nx*sinR+nz*cosR;
     const persp=1/(1+Z*0.30);
