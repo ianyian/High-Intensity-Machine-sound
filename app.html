@@ -105,12 +105,7 @@
   <div id="alertBanner"></div>
 
   <div class="card" id="manifoldCard">
-    <h2>Acoustic manifold — spectral trajectory (time × centroid × amplitude) <button class="help" data-help="manifold" title="What is this chart?">?</button></h2>
-    <div class="legend">
-      <div>SPECTRAL SPREAD</div>
-      <div class="bar" id="legendBar"></div>
-      <div><span id="legTop">6.0 kHz</span><br><br><span>0.0 kHz</span></div>
-    </div>
+    <h2>Spatiotemporal acoustic manifold — sound events (time × frequency × intensity) <button class="help" data-help="manifold" title="What is this chart?">?</button></h2>
     <canvas id="manifold" height="380" data-vh="0.27"></canvas>
   </div>
 
@@ -180,8 +175,6 @@ const cvManifold=$("manifold"), cvSpec=$("spectrum"), cvGram=$("spectrogram"), c
 const log=(msg,cls)=>{const d=$("log");const t=new Date().toLocaleTimeString();
   d.insertAdjacentHTML("afterbegin",`<div>[${t}] ${msg}</div>`);};
 
-/* legend gradient (blue→magenta→red→yellow, like the reference) */
-(() => {const b=$("legendBar");b.style.background="linear-gradient(to top,#3a3aff,#b040d0,#ff4040,#ffd020)";})();
 function spreadColor(t){ // t 0..1
   t=Math.min(1,Math.max(0,t));
   const stops=[[58,58,255],[176,64,208],[255,64,64],[255,208,32]];
@@ -333,8 +326,15 @@ function extractFeatures(){
     let s=0; for(let i=1;i<n;i++) s+=Math.abs(freqData[i]-baseline[i]);
     dev=(s/n)/60*100; // normalize vs 60 dB span
   }
+  // 16 frequency-band energies (0..1) over the displayed range, for the side panel
+  const NB=16, showN=Math.floor(n*0.5), bands=new Float32Array(NB);
+  for(let b=0;b<NB;b++){
+    const s0=1+Math.floor(b/NB*showN), s1=Math.max(s0+1,Math.floor((b+1)/NB*showN));
+    let acc=0; for(let i=s0;i<s1;i++) acc+=freqData[i];
+    bands[b]=Math.max(0,Math.min(1,(acc/(s1-s0)+95)/60));
+  }
   return {t:(performance.now()-startTime)/1000, db, rms, crest,
-          peak:peakI*binHz, centroid, spread, flatness, rolloff:roll, dev, nyq};
+          peak:peakI*binHz, centroid, spread, flatness, rolloff:roll, dev, nyq, bands};
 }
 
 /* ---------- drawing ---------- */
@@ -412,55 +412,125 @@ function drawRadar(f){
   c.textAlign="left";
 }
 
+/* rainbow frequency scale: 0 Hz violet -> red -> orange -> yellow -> green -> cyan */
+function freqColor(fr,maxF,alpha){
+  let t=Math.max(0,Math.min(1,fr/maxF));
+  const stops=[[150,60,220],[235,45,70],[255,140,0],[255,225,60],[80,220,90],[70,225,225]];
+  const x=t*(stops.length-1), i=Math.min(stops.length-2,Math.floor(x)), fpt=x-i;
+  const cc=stops[i].map((v,k)=>Math.round(v+(stops[i+1][k]-v)*fpt));
+  return `rgba(${cc[0]},${cc[1]},${cc[2]},${alpha==null?1:alpha})`;
+}
+
 function drawManifold(f){
   const c=cvManifold.getContext("2d"), W=cvManifold.width, H=cvManifold.height;
-  c.fillStyle="#3a3a3c"; c.fillRect(0,0,W,H);
-  if(rotate3d) rot+=0.004; else rot=0;
-  // add point: x=time, y=centroid, z=oscillating depth; size=amplitude; color=spread
-  trail.push({t:f.t, cen:f.centroid, amp:Math.max(0,(f.db+80)/60), spr:f.spread});
+  const dpr=devicePixelRatio;
+  c.fillStyle="#08080b"; c.fillRect(0,0,W,H);
+  const maxF=f.nyq*0.5;                       // same range as the spectrum panel
+  trail.push({t:f.t, cen:f.centroid, spr:f.spread, dom:f.peak,
+              amp:Math.max(0,Math.min(1,(f.db+80)/60)), db:f.db});
   if(trail.length>MAX_TRAIL) trail.shift();
+
+  /* camera: gentle breathing sway by default (time still reads left to right);
+     the 3D-rotate toggle switches to a full slow orbit */
+  if(rotate3d){rot+=0.004;} else {rot=0.28*Math.sin(f.t*0.22);}
   const cosR=Math.cos(rot), sinR=Math.sin(rot);
-  const t0=trail[0].t, t1=trail[trail.length-1].t;
-  const span=Math.max(5,t1-t0);
-  // auto-scale the centroid axis to the data so the trajectory stays centered in the box
+
+  const t0=trail[0].t, t1=trail[trail.length-1].t, span=Math.max(5,t1-t0);
   let cMin=Infinity,cMax=-Infinity;
   trail.forEach(p=>{if(p.cen<cMin)cMin=p.cen;if(p.cen>cMax)cMax=p.cen;});
-  const cMid=(cMin+cMax)/2, cHalf=Math.max(400,(cMax-cMin)/2*1.25);
-  const dpr=devicePixelRatio, maxR=14*dpr;
-  const mX=W*0.08+maxR, mTop=34*dpr+maxR, mBot=16*dpr+maxR;   // keep bubbles inside the frame
+  const cMid=(cMin+cMax)/2, cHalf=Math.max(400,(cMax-cMin)/2*1.3);
+
+  const mL=64*dpr, mR=118*dpr, mT=26*dpr, mB=24*dpr;
+  const cx=mL+(W-mL-mR)/2, cy=mT+(H-mT-mB)/2;
   const proj=p=>{
-    const nx=((p.t-t0)/span-0.5)*2;                 // -1..1 across time
-    const ny=(p.cen-cMid)/cHalf;                    // -1..1 around data mid
-    const nz=rotate3d?Math.sin(p.t*0.7)*0.6:0;      // depth wobble only in 3D mode
-    const X=nx*cosR-nz*sinR, Z=nx*sinR+nz*cosR;
-    const persp=1/(1+Z*0.35);
-    const cx=W/2, cy=mTop+(H-mTop-mBot)/2;
-    let x=cx+X*(W/2-mX)*persp;
-    let y=cy-ny*(H-mTop-mBot)/2*persp;
-    return {x:Math.max(mX,Math.min(W-mX,x)), y:Math.max(mTop,Math.min(H-mBot,y)), s:persp};
+    const nx=((p.t-t0)/span-0.5)*2;
+    const ny=(p.cen-cMid)/cHalf;
+    const nz=Math.max(-1,Math.min(1,(p.spr/3500-0.6)));
+    const X=nx*cosR-nz*sinR*0.6, Z=nx*sinR+nz*cosR;
+    const persp=1/(1+Z*0.30);
+    return {x:Math.max(mL,Math.min(W-mR,cx+X*(W-mL-mR)/2*persp)),
+            y:Math.max(mT,Math.min(H-mB,cy-ny*(H-mT-mB)/2*persp)), s:persp};
   };
-  let prev=null;
-  c.strokeStyle="rgba(255,255,255,.25)"; c.lineWidth=1;
-  c.beginPath();
-  trail.forEach(p=>{const q=proj(p); prev?c.lineTo(q.x,q.y):c.moveTo(q.x,q.y); prev=q;});
+
+  /* faint thread through time */
+  c.strokeStyle="rgba(255,255,255,.10)"; c.lineWidth=1;
+  c.beginPath(); let pv=null;
+  trail.forEach(p=>{const q=proj(p); pv?c.lineTo(q.x,q.y):c.moveTo(q.x,q.y); pv=q;});
   c.stroke();
+
+  /* glowing particle cloud, additive blending, color = dominant frequency */
+  c.globalCompositeOperation="lighter";
   trail.forEach((p,i)=>{
     const q=proj(p);
-    const r=Math.min(maxR,(2+p.amp*12)*dpr*q.s);
-    c.beginPath(); c.arc(q.x,q.y,r,0,7);
-    c.fillStyle=spreadColor(Math.min(1,p.spr/6000));
-    c.globalAlpha=0.35+0.65*(i/trail.length);
-    c.fill(); c.globalAlpha=1;
-    if(i%60===0&&r>4*dpr){c.fillStyle="rgba(255,255,255,.6)";
-      c.font=`${9*dpr}px sans-serif`;
-      c.fillText((p.cen/1000).toFixed(2)+"K",Math.min(q.x+r+2,W-40*dpr),q.y);}
+    const age=i/trail.length;                          // 0 old .. 1 new
+    const r=Math.max(1.2*dpr,(1.2+p.amp*7)*dpr*q.s);
+    const g=c.createRadialGradient(q.x,q.y,0,q.x,q.y,r*1.9);
+    g.addColorStop(0,freqColor(p.dom,maxF,0.05+0.30*age*p.amp));
+    g.addColorStop(1,freqColor(p.dom,maxF,0));
+    c.fillStyle=g;
+    c.beginPath(); c.arc(q.x,q.y,r*1.9,0,7); c.fill();
+    c.fillStyle=freqColor(p.dom,maxF,0.20+0.70*age);
+    c.beginPath(); c.arc(q.x,q.y,r*0.45,0,7); c.fill();
   });
-  // axis hint
-  c.fillStyle="#9a9aa0"; c.font=`${10*dpr}px sans-serif`;
-  c.fillText("→ TIME ("+span.toFixed(0)+" s window)",W/2-40*dpr,H-6*dpr);
-  c.save(); c.translate(W*0.055,H/2); c.rotate(-Math.PI/2);
-  c.fillText("CENTROID "+(cMid-cHalf<0?0:(cMid-cHalf)/1000).toFixed(1)+"–"+((cMid+cHalf)/1000).toFixed(1)+" kHz",-40*dpr,0);
-  c.restore();
+  c.globalCompositeOperation="source-over";
+
+  /* strongest recent events: white square markers, labels, connecting lines */
+  const cand=trail.map((p,i)=>({p,i})).filter(o=>o.i>2&&o.i<trail.length-1
+      &&o.p.amp>=trail[o.i-1].amp&&o.p.amp>=trail[o.i+1].amp);   // local peaks
+  cand.sort((a,b)=>b.p.amp-a.p.amp);
+  const picked=[];
+  for(const o of cand){
+    if(picked.length>=6) break;
+    if(picked.every(q=>Math.abs(q.i-o.i)>trail.length/12)) picked.push(o);
+  }
+  picked.sort((a,b)=>a.i-b.i);
+  if(picked.length>1){
+    c.strokeStyle="rgba(255,255,255,.45)"; c.lineWidth=1;
+    c.beginPath();
+    picked.forEach((o,k)=>{const q=proj(o.p); k?c.lineTo(q.x,q.y):c.moveTo(q.x,q.y);});
+    c.stroke();
+  }
+  c.textAlign="center";
+  picked.forEach(o=>{
+    const q=proj(o.p), s=9*dpr*q.s;
+    c.strokeStyle="rgba(255,255,255,.95)"; c.lineWidth=1.6*dpr;
+    c.strokeRect(q.x-s,q.y-s,2*s,2*s);
+    c.fillStyle="rgba(255,255,255,.95)"; c.font=`600 ${11*dpr}px sans-serif`;
+    c.fillText((o.p.dom/1000).toFixed(2)+"k",q.x,q.y-s-5*dpr);
+    c.fillStyle="rgba(255,255,255,.65)"; c.font=`${8*dpr}px sans-serif`;
+    c.fillText(o.p.db.toFixed(1)+" dB",q.x,q.y+s+10*dpr);
+  });
+  c.textAlign="left";
+
+  /* left color bar: frequency scale */
+  const bx=16*dpr, bw=9*dpr, by0=mT, by1=H-mB;
+  const grad=c.createLinearGradient(0,by1,0,by0);
+  [0,0.2,0.4,0.6,0.8,1].forEach(t=>grad.addColorStop(t,freqColor(t*maxF,maxF)));
+  c.fillStyle=grad; c.fillRect(bx,by0,bw,by1-by0);
+  c.fillStyle="#8a8a92"; c.font=`${8*dpr}px sans-serif`;
+  for(let k=0;k<=4;k++){
+    const fr=maxF*k/4, y=by1-(by1-by0)*k/4;
+    c.fillText((fr/1000).toFixed(0)+" kHz",bx+bw+4*dpr,y+3*dpr);
+  }
+  c.fillText("COLOR = DOMINANT FREQ",bx,by0-8*dpr);
+
+  /* right panel: live band energies */
+  const px=W-mR+14*dpr, pw=70*dpr, rows=f.bands.length, rh=(H-mT-mB)/rows;
+  c.font=`${7.5*dpr}px sans-serif`;
+  for(let b=0;b<rows;b++){
+    const v=f.bands[b], y=H-mB-(b+1)*rh+rh*0.25;
+    const fr=(b+0.5)/rows*maxF;
+    c.fillStyle="rgba(150,140,255,.22)"; c.fillRect(px,y,pw,rh*0.5);
+    c.fillStyle=freqColor(fr,maxF,0.85);   c.fillRect(px,y,pw*v,rh*0.5);
+    c.fillStyle="#77777f";
+    c.fillText((fr/1000).toFixed(1)+"k",px+pw+4*dpr,y+rh*0.5);
+  }
+  c.fillStyle="#8a8a92"; c.fillText("BAND ENERGY",px,mT-8*dpr);
+
+  /* axis hint */
+  c.fillStyle="#77777f"; c.font=`${9*dpr}px sans-serif`; c.textAlign="center";
+  c.fillText("→ TIME  ("+span.toFixed(0)+" s window)   ·   height = spectral centroid   ·   size = loudness",cx,H-8*dpr);
+  c.textAlign="left";
 }
 
 /* ---------- metric sparklines (movement history per metric) ---------- */
@@ -588,24 +658,27 @@ $("btnCsv").onclick=()=>{
 
 /* ---------- help popups ---------- */
 const HELP={
-manifold:`<h3>Acoustic Manifold — spectral trajectory</h3>
-<p>A trail of the recent sound history, one bubble every ~0.1&nbsp;s. It answers at a glance: <b>is the machine's sound stable, or is it changing?</b></p>
-<h4>How to read each bubble</h4>
+manifold:`<h3>Spatiotemporal Acoustic Manifold — sound events</h3>
+<p>A glowing particle cloud of the recent sound history, one particle every ~0.1&nbsp;s.
+It answers at a glance: <b>is the machine's sound stable, or is it changing?</b></p>
+<h4>How to read it</h4>
 <ul>
-<li><b>Horizontal position</b> = time — oldest left, newest right.</li>
-<li><b>Vertical position</b> = spectral centroid (the "center of gravity" of the frequencies). Low = deep/bassy rumble; high = sharp/hissy sound.</li>
-<li><b>Bubble size</b> = loudness at that moment.</li>
-<li><b>Color</b> (blue → red → yellow) = spectral spread. Blue = clean pure tone; yellow = messy broadband noise.</li>
+<li><b>Horizontal position</b> = time — oldest left, newest right. The gentle swaying is a 3D parallax effect; time always flows left to right.</li>
+<li><b>Vertical position</b> = spectral centroid (the "center of gravity" of the frequencies). Low = deep rumble; high = sharp/hissy sound.</li>
+<li><b>Particle color</b> = dominant frequency, on the rainbow scale at the left (violet = low Hz → red → orange → yellow → green → cyan = high kHz).</li>
+<li><b>Particle size &amp; glow</b> = loudness at that moment.</li>
+<li><b>White squares</b> = the strongest recent sound events (local loudness peaks), labeled with their dominant frequency (kHz) and level (dB), connected in time order.</li>
+<li><b>Right panel</b> = live energy in 16 frequency bands — a compact "equalizer" fingerprint of the current sound.</li>
 </ul>
 <h4>What movement means</h4>
 <ul>
-<li><b>Flat, steady, same-color ribbon</b> — healthy machine in steady state. This is what you want.</li>
-<li><b>Ribbon slowly drifting upward</b> over days/weeks — sound getting "brighter": classic signature of rising friction or bearing wear.</li>
-<li><b>Sudden vertical spikes</b> — impact events (press stroke, part drop, knocking). Regular spikes = your process cycle; <i>irregular</i> spikes = investigate.</li>
-<li><b>Bubbles growing larger</b> — machine getting louder (load, imbalance, looseness).</li>
-<li><b>Color shifting toward yellow</b> — tone turning into noise: grinding, rattle, or air leak developing.</li>
+<li><b>A steady, same-colored band</b> — healthy machine in steady state.</li>
+<li><b>The cloud drifting upward / colors shifting toward cyan</b> over days or weeks — sound getting "brighter": classic signature of rising friction or bearing wear.</li>
+<li><b>White squares appearing at regular intervals</b> — your normal process cycle (press strokes etc.). <i>Irregular</i> or new squares = unexpected impacts, investigate.</li>
+<li><b>Particles growing larger/brighter</b> — machine getting louder (load, imbalance, looseness).</li>
+<li><b>Band-energy bars rising in high bands</b> — high-frequency energy growing: friction, air leaks, early bearing damage.</li>
 </ul>
-<p>The 🔄 "3D rotate" button in the toolbar adds a slow 3D rotation (visual effect for demos only — keep it off for monitoring).</p>`,
+<p>The 🔄 "3D rotate" button switches from the default gentle sway to a full slow orbit (demo effect).</p>`,
 spectrum:`<h3>Live Spectrum (FFT)</h3>
 <p>A real-time snapshot, ~60×/second, of <b>which frequencies are present right now and how strong each is</b>. Horizontal = frequency (Hz), bar height = energy. The dashed yellow line marks the spectral centroid.</p>
 <h4>What the shapes mean for a machine</h4>
